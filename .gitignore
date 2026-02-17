@@ -55,6 +55,7 @@ pids/
 storage/data/
 storage/uploads/
 storage/temp/
+storage/projects/
 
 # Docker
 .dockerignore
