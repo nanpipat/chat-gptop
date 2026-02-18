@@ -35,13 +35,17 @@ func NewChatService(
 	}
 }
 
-func (s *ChatService) CreateChat(ctx context.Context, title string) (*models.Chat, error) {
+func (s *ChatService) CreateChat(ctx context.Context, title string, projectIDs []string) (*models.Chat, error) {
 	if title == "" {
 		title = "New Chat"
 	}
+	if projectIDs == nil {
+		projectIDs = []string{}
+	}
 	chat := &models.Chat{
-		ID:    uuid.New().String(),
-		Title: title,
+		ID:         uuid.New().String(),
+		Title:      title,
+		ProjectIDs: projectIDs,
 	}
 	if err := s.chatRepo.Create(ctx, chat); err != nil {
 		return nil, err
@@ -69,6 +73,21 @@ func (s *ChatService) GetMessages(ctx context.Context, chatID string) ([]models.
 		msgs = []models.Message{}
 	}
 	return msgs, nil
+}
+
+func (s *ChatService) DeleteChat(ctx context.Context, chatID string) error {
+	// Delete messages first (foreign key)
+	if err := s.messageRepo.DeleteByChatID(ctx, chatID); err != nil {
+		return fmt.Errorf("delete messages: %w", err)
+	}
+	if err := s.chatRepo.Delete(ctx, chatID); err != nil {
+		return fmt.Errorf("delete chat: %w", err)
+	}
+	return nil
+}
+
+func (s *ChatService) UpdateProjectIDs(ctx context.Context, chatID string, projectIDs []string) error {
+	return s.chatRepo.UpdateProjectIDs(ctx, chatID, projectIDs)
 }
 
 func (s *ChatService) SendMessage(ctx context.Context, chatID, userMessage string, projectIDs []string) (<-chan string, <-chan error) {

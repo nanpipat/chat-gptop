@@ -61,6 +61,11 @@ func (r *FileRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
+func (r *FileRepo) DeleteByProjectID(ctx context.Context, projectID string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM files WHERE project_id=$1`, projectID)
+	return err
+}
+
 func (r *FileRepo) GetChildren(ctx context.Context, parentID string) ([]models.File, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, project_id, parent_id, name, path, is_dir, created_at FROM files WHERE parent_id=$1 ORDER BY is_dir DESC, name ASC`,

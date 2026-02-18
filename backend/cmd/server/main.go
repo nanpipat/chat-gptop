@@ -34,11 +34,13 @@ func main() {
 	ingestSvc := services.NewIngestService(chunkRepo, embeddingSvc)
 	fileSvc := services.NewFileService(fileRepo, chunkRepo, ingestSvc, cfg.StoragePath)
 	chatSvc := services.NewChatService(chatRepo, messageRepo, ragSvc, openaiSvc)
+	gitSvc := services.NewGitService(projectRepo, fileRepo, chunkRepo, fileSvc, cfg.StoragePath, cfg.GitEncryptionKey)
 
 	// Handlers
 	projectHandler := handlers.NewProjectHandler(projectRepo)
 	fileHandler := handlers.NewFileHandler(fileSvc)
 	chatHandler := handlers.NewChatHandler(chatSvc)
+	gitHandler := handlers.NewGitHandler(gitSvc)
 
 	// Echo
 	e := echo.New()
@@ -60,9 +62,17 @@ func main() {
 	e.GET("/projects/:id/files", fileHandler.ListFiles)
 	e.DELETE("/files/:id", fileHandler.DeleteFile)
 
+	// Git
+	e.PUT("/projects/:id/git", gitHandler.SaveGitConfig)
+	e.GET("/projects/:id/git", gitHandler.GetGitConfig)
+	e.POST("/projects/:id/git/sync", gitHandler.SyncGit)
+	e.DELETE("/projects/:id/git", gitHandler.RemoveGitConfig)
+
 	// Chats
 	e.POST("/chats", chatHandler.CreateChat)
 	e.GET("/chats", chatHandler.ListChats)
+	e.DELETE("/chats/:id", chatHandler.DeleteChat)
+	e.PUT("/chats/:id/projects", chatHandler.UpdateChatProjects)
 	e.GET("/chats/:id/messages", chatHandler.GetMessages)
 	e.POST("/chats/:id/messages", chatHandler.SendMessage)
 

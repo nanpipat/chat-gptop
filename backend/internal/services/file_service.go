@@ -1,11 +1,13 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -32,6 +34,42 @@ func NewFileService(
 		ingestService: ingestService,
 		storagePath:   storagePath,
 	}
+}
+
+// textExtensions lists file extensions that should be ingested as text
+var textExtensions = map[string]bool{
+	".go": true, ".py": true, ".js": true, ".ts": true, ".tsx": true, ".jsx": true,
+	".html": true, ".css": true, ".scss": true, ".less": true,
+	".json": true, ".yaml": true, ".yml": true, ".toml": true, ".xml": true,
+	".md": true, ".txt": true, ".csv": true, ".log": true, ".env": true,
+	".sh": true, ".bash": true, ".zsh": true, ".fish": true, ".bat": true, ".ps1": true,
+	".sql": true, ".graphql": true, ".gql": true,
+	".rs": true, ".rb": true, ".java": true, ".kt": true, ".scala": true,
+	".c": true, ".cpp": true, ".h": true, ".hpp": true, ".cs": true,
+	".php": true, ".swift": true, ".r": true, ".m": true,
+	".dockerfile": true, ".makefile": true, ".gitignore": true,
+	".tf": true, ".hcl": true, ".proto": true, ".prisma": true,
+	".vue": true, ".svelte": true, ".astro": true,
+	".conf": true, ".cfg": true, ".ini": true, ".properties": true,
+}
+
+func isTextFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == "" {
+		// Files without extension: check common names
+		base := strings.ToLower(filepath.Base(filename))
+		switch base {
+		case "dockerfile", "makefile", "rakefile", "gemfile", "procfile",
+			".gitignore", ".dockerignore", ".env", "readme", "license":
+			return true
+		}
+		return false
+	}
+	return textExtensions[ext]
+}
+
+func isBinaryContent(data []byte) bool {
+	return bytes.ContainsRune(data, 0)
 }
 
 func (s *FileService) UploadFile(ctx context.Context, projectID string, parentID *string, filename string, reader io.Reader) (*models.File, error) {
@@ -65,8 +103,11 @@ func (s *FileService) UploadFile(ctx context.Context, projectID string, parentID
 		return nil, fmt.Errorf("insert file: %w", err)
 	}
 
-	if err := s.ingestService.IngestContent(ctx, projectID, fileID, string(content)); err != nil {
-		return nil, fmt.Errorf("ingest: %w", err)
+	// Only ingest text files — skip binary files to avoid PostgreSQL UTF8 errors
+	if isTextFile(filename) && !isBinaryContent(content) {
+		if err := s.ingestService.IngestContent(ctx, projectID, fileID, string(content)); err != nil {
+			return nil, fmt.Errorf("ingest: %w", err)
+		}
 	}
 
 	return f, nil

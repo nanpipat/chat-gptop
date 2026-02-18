@@ -51,6 +51,15 @@ func Migrate(pool *pgxpool.Pool) {
 			content TEXT NOT NULL,
 			created_at TIMESTAMP DEFAULT NOW()
 		)`,
+
+		// Git sync columns
+		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS git_url TEXT`,
+		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS git_branch TEXT DEFAULT 'main'`,
+		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS git_token_encrypted TEXT`,
+		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMP`,
+
+		// Chat project selection
+		`ALTER TABLE chats ADD COLUMN IF NOT EXISTS project_ids TEXT[] DEFAULT '{}'`,
 	}
 
 	for _, q := range queries {

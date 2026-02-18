@@ -5,7 +5,19 @@ const API_BASE = typeof window !== 'undefined'
 export interface Project {
   id: string;
   name: string;
+  git_url?: string;
+  git_branch?: string;
+  last_synced_at?: string;
   created_at: string;
+}
+
+export interface GitConfig {
+  git_url: string;
+  git_branch: string;
+  has_token: boolean;
+  last_synced_at?: string;
+  sync_status?: string;  // "syncing", "done", "error"
+  sync_error?: string;
 }
 
 export interface FileNode {
@@ -22,6 +34,7 @@ export interface FileNode {
 export interface Chat {
   id: string;
   title: string;
+  project_ids: string[];
   created_at: string;
 }
 
@@ -64,10 +77,14 @@ export async function uploadFolder(projectId: string, files: FileList): Promise<
     const relativePath = (file as any).webkitRelativePath || file.name;
     form.append('paths', relativePath);
   }
-  await fetch(`${API_BASE}/projects/${projectId}/upload-folder`, {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/upload-folder`, {
     method: 'POST',
     body: form,
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(data.error || `Upload failed (${res.status})`);
+  }
 }
 
 export async function uploadFile(projectId: string, file: File): Promise<void> {
@@ -83,18 +100,74 @@ export async function deleteFile(fileId: string): Promise<void> {
   await fetch(`${API_BASE}/files/${fileId}`, { method: 'DELETE' });
 }
 
+// Git sync API
+
+export async function getGitConfig(projectId: string): Promise<GitConfig | null> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/git`);
+  const data = await res.json();
+  if (!data.git_url) return null;
+  return data;
+}
+
+export async function saveGitConfig(
+  projectId: string,
+  gitUrl: string,
+  gitBranch: string,
+  token?: string,
+): Promise<void> {
+  const body: Record<string, string> = { git_url: gitUrl, git_branch: gitBranch };
+  if (token) body.token = token;
+  const res = await fetch(`${API_BASE}/projects/${projectId}/git`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Save failed' }));
+    throw new Error(data.error || 'Save failed');
+  }
+}
+
+export async function syncGit(projectId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/git/sync`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Sync failed' }));
+    throw new Error(data.error || 'Sync failed');
+  }
+}
+
+export async function removeGitConfig(projectId: string): Promise<void> {
+  await fetch(`${API_BASE}/projects/${projectId}/git`, { method: 'DELETE' });
+}
+
+// Chat API
+
 export async function getChats(): Promise<Chat[]> {
   const res = await fetch(`${API_BASE}/chats`);
   return res.json();
 }
 
-export async function createChat(title?: string): Promise<Chat> {
+export async function deleteChat(id: string): Promise<void> {
+  await fetch(`${API_BASE}/chats/${id}`, { method: 'DELETE' });
+}
+
+export async function createChat(title?: string, projectIds?: string[]): Promise<Chat> {
   const res = await fetch(`${API_BASE}/chats`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: title || '' }),
+    body: JSON.stringify({ title: title || '', project_ids: projectIds || [] }),
   });
   return res.json();
+}
+
+export async function updateChatProjects(chatId: string, projectIds: string[]): Promise<void> {
+  await fetch(`${API_BASE}/chats/${chatId}/projects`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_ids: projectIds }),
+  });
 }
 
 export async function getMessages(chatId: string): Promise<Message[]> {

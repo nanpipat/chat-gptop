@@ -44,3 +44,8 @@ func (r *MessageRepo) ListByChatID(ctx context.Context, chatID string) ([]models
 	}
 	return messages, nil
 }
+
+func (r *MessageRepo) DeleteByChatID(ctx context.Context, chatID string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM messages WHERE chat_id=$1`, chatID)
+	return err
+}

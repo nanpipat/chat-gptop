@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -46,31 +50,78 @@ func (h *FileHandler) UploadFolder(c echo.Context) error {
 	projectID := c.Param("id")
 	ctx := c.Request().Context()
 
-	form, err := c.MultipartForm()
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid multipart form"})
+	// Get multipart boundary from Content-Type
+	contentType := c.Request().Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.HasPrefix(mediaType, "multipart/") {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "expected multipart form"})
+	}
+	boundary := params["boundary"]
+	if boundary == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "no boundary in content-type"})
 	}
 
-	files := form.File["files"]
-	paths := form.Value["paths"]
+	// Stream parts one at a time — avoids Go 1.24 multipart size limits
+	mr := multipart.NewReader(c.Request().Body, boundary)
 
-	if len(files) == 0 {
+	type fileEntry struct {
+		filename string
+		data     []byte
+		relPath  string
+	}
+	var entries []fileEntry
+	var paths []string
+
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "read part: " + err.Error()})
+		}
+
+		fieldName := part.FormName()
+		switch fieldName {
+		case "paths":
+			val, err := io.ReadAll(part)
+			if err != nil {
+				part.Close()
+				continue
+			}
+			paths = append(paths, string(val))
+		case "files":
+			data, err := io.ReadAll(part)
+			if err != nil {
+				part.Close()
+				continue
+			}
+			entries = append(entries, fileEntry{
+				filename: part.FileName(),
+				data:     data,
+			})
+		}
+		part.Close()
+	}
+
+	if len(entries) == 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "no files provided"})
+	}
+
+	// Assign relative paths to entries
+	for i := range entries {
+		if i < len(paths) {
+			entries[i].relPath = paths[i]
+		} else {
+			entries[i].relPath = entries[i].filename
+		}
 	}
 
 	// Track created directories: relPath -> dirID
 	dirCache := make(map[string]string)
 
-	for i, fh := range files {
-		var relPath string
-		if i < len(paths) {
-			relPath = paths[i]
-		} else {
-			relPath = fh.Filename
-		}
-
-		// Ensure parent directories exist
-		dir := filepath.Dir(relPath)
+	for _, entry := range entries {
+		dir := filepath.Dir(entry.relPath)
 		var parentID *string
 
 		if dir != "." && dir != "" {
@@ -80,13 +131,8 @@ func (h *FileHandler) UploadFolder(c echo.Context) error {
 			}
 		}
 
-		src, err := fh.Open()
-		if err != nil {
-			continue
-		}
-
-		_, err = h.fileSvc.UploadFile(ctx, projectID, parentID, filepath.Base(relPath), src)
-		src.Close()
+		reader := bytes.NewReader(entry.data)
+		_, err = h.fileSvc.UploadFile(ctx, projectID, parentID, filepath.Base(entry.relPath), reader)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "upload: " + err.Error()})
 		}

@@ -60,3 +60,8 @@ func (r *ChunkRepo) DeleteByFileID(ctx context.Context, fileID string) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM document_chunks WHERE file_id=$1`, fileID)
 	return err
 }
+
+func (r *ChunkRepo) DeleteByProjectID(ctx context.Context, projectID string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM document_chunks WHERE project_id=$1`, projectID)
+	return err
+}

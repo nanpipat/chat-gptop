@@ -19,11 +19,12 @@ func NewChatHandler(chatSvc *services.ChatService) *ChatHandler {
 
 func (h *ChatHandler) CreateChat(c echo.Context) error {
 	var req struct {
-		Title string `json:"title"`
+		Title      string   `json:"title"`
+		ProjectIDs []string `json:"project_ids"`
 	}
 	_ = c.Bind(&req)
 
-	chat, err := h.chatSvc.CreateChat(c.Request().Context(), req.Title)
+	chat, err := h.chatSvc.CreateChat(c.Request().Context(), req.Title, req.ProjectIDs)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -45,6 +46,28 @@ func (h *ChatHandler) GetMessages(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, msgs)
+}
+
+func (h *ChatHandler) DeleteChat(c echo.Context) error {
+	chatID := c.Param("id")
+	if err := h.chatSvc.DeleteChat(c.Request().Context(), chatID); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *ChatHandler) UpdateChatProjects(c echo.Context) error {
+	chatID := c.Param("id")
+	var req struct {
+		ProjectIDs []string `json:"project_ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	if err := h.chatSvc.UpdateProjectIDs(c.Request().Context(), chatID, req.ProjectIDs); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (h *ChatHandler) SendMessage(c echo.Context) error {

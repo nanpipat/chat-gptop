@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
-import ProjectPanel from './ProjectPanel'
 import type { Message, Project } from '@/lib/api'
 import { sendMessage, createChat } from '@/lib/api'
 
@@ -15,6 +14,7 @@ interface Props {
   projects: Project[]
   onMessagesChanged: () => void
   onChatCreated: (chatId: string) => void
+  onToggleProjectPanel: () => void
 }
 
 export default function ChatWindow({
@@ -26,11 +26,11 @@ export default function ChatWindow({
   projects,
   onMessagesChanged,
   onChatCreated,
+  onToggleProjectPanel,
 }: Props) {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
-  const [showProjectPanel, setShowProjectPanel] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -45,7 +45,7 @@ export default function ChatWindow({
 
     let currentChatId = chatId
     if (!currentChatId) {
-      const chat = await createChat(input.trim().slice(0, 50))
+      const chat = await createChat(input.trim().slice(0, 50), selectedProjectIds)
       currentChatId = chat.id
       onChatCreated(currentChatId)
     }
@@ -149,7 +149,7 @@ export default function ChatWindow({
       }}>
         {/* Project button */}
         <button
-          onClick={() => setShowProjectPanel(true)}
+          onClick={onToggleProjectPanel}
           title="Manage projects"
           style={{
             background: 'none',
@@ -225,6 +225,7 @@ export default function ChatWindow({
       background: '#212121',
       height: '100vh',
       overflow: 'hidden',
+      minWidth: 0,
     }}>
       {isLanding ? (
         /* Landing state */
@@ -294,14 +295,6 @@ export default function ChatWindow({
           </div>
         </>
       )}
-
-      {/* Project panel slide-over */}
-      <ProjectPanel
-        open={showProjectPanel}
-        onClose={() => setShowProjectPanel(false)}
-        selectedProjectIds={selectedProjectIds}
-        onToggleProject={onToggleProject}
-      />
     </div>
   )
 }

@@ -18,15 +18,15 @@ func NewChatRepo(db *pgxpool.Pool) *ChatRepo {
 
 func (r *ChatRepo) Create(ctx context.Context, c *models.Chat) error {
 	_, err := r.db.Exec(ctx,
-		`INSERT INTO chats (id, title) VALUES ($1, $2)`,
-		c.ID, c.Title,
+		`INSERT INTO chats (id, title, project_ids) VALUES ($1, $2, $3)`,
+		c.ID, c.Title, c.ProjectIDs,
 	)
 	return err
 }
 
 func (r *ChatRepo) List(ctx context.Context) ([]models.Chat, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, title, created_at FROM chats ORDER BY created_at DESC`,
+		`SELECT id, title, COALESCE(project_ids, '{}'), created_at FROM chats ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -36,8 +36,11 @@ func (r *ChatRepo) List(ctx context.Context) ([]models.Chat, error) {
 	var chats []models.Chat
 	for rows.Next() {
 		var c models.Chat
-		if err := rows.Scan(&c.ID, &c.Title, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &c.ProjectIDs, &c.CreatedAt); err != nil {
 			return nil, err
+		}
+		if c.ProjectIDs == nil {
+			c.ProjectIDs = []string{}
 		}
 		chats = append(chats, c)
 	}
@@ -46,5 +49,21 @@ func (r *ChatRepo) List(ctx context.Context) ([]models.Chat, error) {
 
 func (r *ChatRepo) UpdateTitle(ctx context.Context, id, title string) error {
 	_, err := r.db.Exec(ctx, `UPDATE chats SET title=$1 WHERE id=$2`, title, id)
+	return err
+}
+
+func (r *ChatRepo) UpdateProjectIDs(ctx context.Context, id string, projectIDs []string) error {
+	if projectIDs == nil {
+		projectIDs = []string{}
+	}
+	_, err := r.db.Exec(ctx,
+		`UPDATE chats SET project_ids=$1 WHERE id=$2`,
+		projectIDs, id,
+	)
+	return err
+}
+
+func (r *ChatRepo) Delete(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM chats WHERE id=$1`, id)
 	return err
 }
