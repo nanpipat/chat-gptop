@@ -11,6 +11,7 @@ import (
 	"rag-chat-system/internal/handlers"
 	"rag-chat-system/internal/repositories"
 	"rag-chat-system/internal/services"
+	"rag-chat-system/internal/storage"
 )
 
 func main() {
@@ -27,14 +28,28 @@ func main() {
 	chatRepo := repositories.NewChatRepo(pool)
 	messageRepo := repositories.NewMessageRepo(pool)
 
+	// Storage
+	var store storage.Storage
+	if cfg.R2Endpoint != "" && cfg.R2AccessKeyID != "" && cfg.R2SecretAccessKey != "" && cfg.R2Bucket != "" {
+		log.Println("Initializing S3 Storage (R2)...")
+		s3Store, err := storage.NewS3Storage(cfg.R2AccessKeyID, cfg.R2SecretAccessKey, cfg.R2Endpoint, cfg.R2Bucket)
+		if err != nil {
+			log.Fatalf("Failed to initialize S3 storage: %v", err)
+		}
+		store = s3Store
+	} else {
+		log.Println("Initializing Local Storage...")
+		store = storage.NewLocalStorage(cfg.StoragePath)
+	}
+
 	// Services
 	openaiSvc := services.NewOpenAIService(cfg.OpenAIKey)
 	embeddingSvc := services.NewEmbeddingService(openaiSvc)
 	ragSvc := services.NewRAGService(chunkRepo, embeddingSvc)
 	ingestSvc := services.NewIngestService(chunkRepo, embeddingSvc)
-	fileSvc := services.NewFileService(fileRepo, chunkRepo, ingestSvc, cfg.StoragePath)
+	fileSvc := services.NewFileService(fileRepo, chunkRepo, ingestSvc, store)
 	chatSvc := services.NewChatService(chatRepo, messageRepo, ragSvc, openaiSvc)
-	gitSvc := services.NewGitService(projectRepo, fileRepo, chunkRepo, fileSvc, cfg.StoragePath, cfg.GitEncryptionKey)
+	gitSvc := services.NewGitService(projectRepo, fileRepo, chunkRepo, fileSvc, cfg.GitEncryptionKey)
 
 	// Handlers
 	projectHandler := handlers.NewProjectHandler(projectRepo)

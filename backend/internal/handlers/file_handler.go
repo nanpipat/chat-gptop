@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"log"
 	"rag-chat-system/internal/services"
 )
 
@@ -34,12 +35,14 @@ func (h *FileHandler) UploadFile(c echo.Context) error {
 
 	src, err := file.Open()
 	if err != nil {
+		log.Printf("[FileHandler] Failed to open file: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to open file"})
 	}
 	defer src.Close()
 
 	f, err := h.fileSvc.UploadFile(ctx, projectID, nil, file.Filename, src)
 	if err != nil {
+		log.Printf("[FileHandler] Failed to upload file to storage: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
@@ -134,6 +137,7 @@ func (h *FileHandler) UploadFolder(c echo.Context) error {
 		reader := bytes.NewReader(entry.data)
 		_, err = h.fileSvc.UploadFile(ctx, projectID, parentID, filepath.Base(entry.relPath), reader)
 		if err != nil {
+			log.Printf("[FileHandler] Failed to upload file in folder: %s, error: %v", entry.relPath, err)
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "upload: " + err.Error()})
 		}
 	}

@@ -27,7 +27,6 @@ type GitService struct {
 	fileRepo      *repositories.FileRepo
 	chunkRepo     *repositories.ChunkRepo
 	fileService   *FileService
-	storagePath   string
 	encryptionKey string
 
 	mu         sync.Mutex
@@ -39,7 +38,6 @@ func NewGitService(
 	fileRepo *repositories.FileRepo,
 	chunkRepo *repositories.ChunkRepo,
 	fileService *FileService,
-	storagePath string,
 	encryptionKey string,
 ) *GitService {
 	return &GitService{
@@ -47,7 +45,6 @@ func NewGitService(
 		fileRepo:      fileRepo,
 		chunkRepo:     chunkRepo,
 		fileService:   fileService,
-		storagePath:   storagePath,
 		encryptionKey: encryptionKey,
 		syncStatus:    make(map[string]*syncState),
 	}
@@ -203,8 +200,9 @@ func (s *GitService) Sync(ctx context.Context, projectID string) error {
 	}
 
 	// Clean up storage directory
-	projectDir := filepath.Join(s.storagePath, "projects", projectID)
-	_ = os.RemoveAll(projectDir)
+	// Clean up storage directory (Legacy: not needed for S3/Storage abstraction)
+	// projectDir := filepath.Join(s.storagePath, "projects", projectID)
+	// _ = os.RemoveAll(projectDir)
 
 	// Walk cloned files and ingest
 	log.Printf("[GitSync] Ingesting files for project %s", projectID)

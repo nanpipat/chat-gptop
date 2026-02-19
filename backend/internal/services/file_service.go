@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,26 +12,29 @@ import (
 
 	"rag-chat-system/internal/models"
 	"rag-chat-system/internal/repositories"
+	"rag-chat-system/internal/storage"
 )
 
 type FileService struct {
 	fileRepo      *repositories.FileRepo
 	chunkRepo     *repositories.ChunkRepo
 	ingestService *IngestService
-	storagePath   string
+	storage       storage.Storage
+	// Keep storagePath just in case for specialized operations, or remove it?
+	// It's used for projectDir construction, but projectDir logic needs to change for S3
 }
 
 func NewFileService(
 	fileRepo *repositories.FileRepo,
 	chunkRepo *repositories.ChunkRepo,
 	ingestService *IngestService,
-	storagePath string,
+	store storage.Storage,
 ) *FileService {
 	return &FileService{
 		fileRepo:      fileRepo,
 		chunkRepo:     chunkRepo,
 		ingestService: ingestService,
-		storagePath:   storagePath,
+		storage:       store,
 	}
 }
 
@@ -73,20 +75,18 @@ func isBinaryContent(data []byte) bool {
 }
 
 func (s *FileService) UploadFile(ctx context.Context, projectID string, parentID *string, filename string, reader io.Reader) (*models.File, error) {
-	projectDir := filepath.Join(s.storagePath, "projects", projectID)
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
-		return nil, fmt.Errorf("create dir: %w", err)
-	}
-
 	fileID := uuid.New().String()
-	diskPath := filepath.Join(projectDir, fileID+"_"+filename)
+
+	// Create object key: projects/{projectID}/{fileID}_{filename}
+	// Using fileID prefix prevents name collisions
+	objectKey := fmt.Sprintf("projects/%s/%s_%s", projectID, fileID, filename)
 
 	content, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	if err := os.WriteFile(diskPath, content, 0644); err != nil {
+	if err := s.storage.Put(ctx, objectKey, bytes.NewReader(content)); err != nil {
 		return nil, fmt.Errorf("write file: %w", err)
 	}
 
@@ -95,7 +95,7 @@ func (s *FileService) UploadFile(ctx context.Context, projectID string, parentID
 		ProjectID: projectID,
 		ParentID:  parentID,
 		Name:      filename,
-		Path:      diskPath,
+		Path:      objectKey,
 		IsDir:     false,
 	}
 
@@ -156,7 +156,7 @@ func (s *FileService) DeleteFile(ctx context.Context, fileID string) error {
 		}
 	} else {
 		_ = s.chunkRepo.DeleteByFileID(ctx, fileID)
-		_ = os.Remove(f.Path)
+		_ = s.storage.Delete(ctx, f.Path)
 	}
 
 	return s.fileRepo.Delete(ctx, fileID)
@@ -175,7 +175,7 @@ func (s *FileService) deleteRecursive(ctx context.Context, parentID string) erro
 			}
 		} else {
 			_ = s.chunkRepo.DeleteByFileID(ctx, child.ID)
-			_ = os.Remove(child.Path)
+			_ = s.storage.Delete(ctx, child.Path)
 		}
 		_ = s.fileRepo.Delete(ctx, child.ID)
 	}
