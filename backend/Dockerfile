@@ -2,7 +2,7 @@ FROM golang:1.24
 
 WORKDIR /app
 
-COPY . .
+COPY backend/ .
 
 RUN go mod tidy
 RUN go build -o server cmd/server/main.go
