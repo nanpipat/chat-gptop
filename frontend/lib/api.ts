@@ -1,6 +1,6 @@
-const API_BASE = typeof window !== 'undefined'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined'
   ? 'http://localhost:8080'
-  : 'http://backend:8080';
+  : 'http://backend:8080');
 
 export interface Project {
   id: string;

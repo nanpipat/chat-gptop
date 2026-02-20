@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -36,6 +38,17 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize S3 storage: %v", err)
 		}
+
+		// Verify connection immediately
+		log.Println("Verifying R2 connection...")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := s3Store.VerifyConnection(ctx); err != nil {
+			cancel()
+			log.Fatalf("❌ R2 Connection Verification Failed: %v\nCheck R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET", err)
+		}
+		cancel()
+		log.Println("✅ R2 Connection Verified Successfully")
+
 		store = s3Store
 	} else {
 		log.Println("Initializing Local Storage...")

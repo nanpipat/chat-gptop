@@ -30,7 +30,9 @@ services:
 #      - postgres
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     restart: always
     ports:
       - "3000:3000"

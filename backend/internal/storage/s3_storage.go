@@ -112,3 +112,14 @@ func (s *S3Storage) Delete(ctx context.Context, path string) error {
 	}
 	return err
 }
+
+// VerifyConnection checks if we can access the bucket
+func (s *S3Storage) VerifyConnection(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.bucket),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect to bucket '%s': %w", s.bucket, err)
+	}
+	return nil
+}
