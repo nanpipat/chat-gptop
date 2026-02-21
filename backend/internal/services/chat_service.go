@@ -125,14 +125,44 @@ func (s *ChatService) SendMessage(ctx context.Context, chatID, userMessage strin
 			systemPrompt = rag.SystemPromptNoContext
 		}
 
+		// Build messages array: system + history + current user message
+		messages := []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+		}
+
+		// Fetch recent conversation history (up to 20 messages)
+		history, err := s.messageRepo.ListByChatID(ctx, chatID)
+		if err == nil && len(history) > 0 {
+			// Exclude the last message (the one we just saved above)
+			if len(history) > 0 && history[len(history)-1].ID == userMsg.ID {
+				history = history[:len(history)-1]
+			}
+			// Keep only the last 20 messages
+			if len(history) > 20 {
+				history = history[len(history)-20:]
+			}
+			for _, msg := range history {
+				role := openai.ChatMessageRoleUser
+				if msg.Role == "assistant" {
+					role = openai.ChatMessageRoleAssistant
+				}
+				messages = append(messages, openai.ChatCompletionMessage{
+					Role:    role,
+					Content: msg.Content,
+				})
+			}
+		}
+
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleUser,
+			Content: userMessage,
+		})
+
 		// Stream from OpenAI
 		stream, err := s.openaiSvc.Client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-			Model: openai.GPT4oMini,
-			Messages: []openai.ChatCompletionMessage{
-				{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-				{Role: openai.ChatMessageRoleUser, Content: userMessage},
-			},
-			Stream: true,
+			Model:    openai.GPT4oMini,
+			Messages: messages,
+			Stream:   true,
 		})
 		if err != nil {
 			errCh <- fmt.Errorf("openai stream: %w", err)

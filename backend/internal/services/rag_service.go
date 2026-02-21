@@ -25,7 +25,7 @@ func (s *RAGService) SearchRelevantChunks(ctx context.Context, query string, pro
 		return nil, err
 	}
 
-	return s.chunkRepo.SearchByEmbedding(ctx, embedding, projectIDs, 10)
+	return s.chunkRepo.HybridSearch(ctx, embedding, query, projectIDs, 10)
 }
 
 func (s *RAGService) BuildContext(chunks []string) string {

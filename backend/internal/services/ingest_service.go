@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/google/uuid"
 
@@ -22,8 +23,9 @@ func NewIngestService(chunkRepo *repositories.ChunkRepo, embeddingService *Embed
 	}
 }
 
-func (s *IngestService) IngestContent(ctx context.Context, projectID, fileID, content string) error {
-	chunks := rag.ChunkText(content, 800, 100)
+func (s *IngestService) IngestContent(ctx context.Context, projectID, fileID, content, fileName string) error {
+	fileExt := filepath.Ext(fileName)
+	chunks := rag.ChunkText(content, 500, 100)
 
 	for _, chunk := range chunks {
 		embedding, err := s.embeddingService.CreateEmbedding(ctx, chunk)
@@ -32,7 +34,7 @@ func (s *IngestService) IngestContent(ctx context.Context, projectID, fileID, co
 		}
 
 		chunkID := uuid.New().String()
-		if err := s.chunkRepo.Create(ctx, chunkID, projectID, fileID, chunk, embedding); err != nil {
+		if err := s.chunkRepo.Create(ctx, chunkID, projectID, fileID, chunk, embedding, fileName, fileExt); err != nil {
 			return fmt.Errorf("store chunk: %w", err)
 		}
 	}

@@ -105,7 +105,7 @@ func (s *FileService) UploadFile(ctx context.Context, projectID string, parentID
 
 	// Only ingest text files — skip binary files to avoid PostgreSQL UTF8 errors
 	if isTextFile(filename) && !isBinaryContent(content) {
-		if err := s.ingestService.IngestContent(ctx, projectID, fileID, string(content)); err != nil {
+		if err := s.ingestService.IngestContent(ctx, projectID, fileID, string(content), filename); err != nil {
 			return nil, fmt.Errorf("ingest: %w", err)
 		}
 	}
